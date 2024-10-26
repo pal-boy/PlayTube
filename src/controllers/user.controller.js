@@ -3,6 +3,7 @@ import {apiError} from "../utils/apiError.js"
 import { User } from '../models/user.model.js';
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { apiResponse } from '../utils/apiResponse.js';
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshTokens = async(userId)=>{
     try {
@@ -95,7 +96,7 @@ const loginUser = asyncHandler(async function (req,res) {
     // generate access and refresh token
     // send cookie
     const {email, password, username} = req.body;
-    if (!email || !username) {
+    if (!(email || username)) {
         throw new apiError(400,"username or email is required");
     }
     const user = await User.findOne({
@@ -159,8 +160,47 @@ const logoutUser = asyncHandler(async (req,res)=>{
 })
 // Logout a user code ends here
 
+// RefreshAccessToken code starts here
+const refreshAccessToken = asyncHandler(async(req,res)=>{
+    const incomingRefreshAccessToken = req.cookies.refreshToken || req.body.refreshToken;
+    if (!incomingRefreshAccessToken) {
+        throw new apiError(401,"Unauthorized request");
+    }
+
+    const decodedToken = jwt.verify(incomingRefreshAccessToken,process.env.REFRESH_TOKEN_SECRET);
+
+    const user = await User.findById(decodedToken?._id);
+    if (!user) {
+        throw new apiError(401,"Invalid refresh token");
+    }
+
+    if (incomingRefreshAccessToken !== user?.refreshToken) {
+        throw new apiError(401,"Refresh token is expired or used");
+    }
+
+    const {accessToken,refreshToken} = await generateAccessAndRefreshTokens(user._id);
+    const options = {
+        httponly : true,
+        secure : true
+    };
+
+    return res.status(200)
+            .cookie("accessToken",accessToken,options)
+            .cookie("refreshToken",refreshToken,options)
+            .json(
+                new apiResponse(
+                    200,{
+                        accessToken,refreshToken
+                    },
+                    "Access token refreshed successfully"
+                )
+            )
+})
+// RefreshAccessToken code ends here
+
 export {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    refreshAccessToken
 };
