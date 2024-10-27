@@ -195,12 +195,99 @@ const refreshAccessToken = asyncHandler(async(req,res)=>{
                     "Access token refreshed successfully"
                 )
             )
-})
+});
 // RefreshAccessToken code ends here
+
+
+// ChangeCurrentPassword code starts here
+const changeCurrentPassword = asyncHandler(async(req,res)=>{
+    const {oldPassword,newPassword} = req.body;
+
+    const user = await User.findById(req.user?._id);
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+    if (!isPasswordCorrect) {
+        throw new apiError(400,"Invalid old password");
+    }
+
+    user.password = newPassword;
+    await user.save({validateBeforeSave:false});
+
+    return res.status(200).json(
+        new apiResponse(200,{},"Password changed successfully")
+    );
+});
+// ChangeCurrentPassword code ends here
+
+
+// getCurrentUser code starts here
+const getCurrentUser = asyncHandler(async(req,res)=>{
+    return res.status(200).json(200,req.user,"Current user fectched successfully");
+})
+// getCurrentUser code ends here
+
+
+// updateAccountDetails code starts here
+const updateAccountDetails = asyncHandler(async (req,res) => {
+    const {fullname,email} = req.body;
+    if(!fullname || !email){
+        throw new apiError(401,"All fields are required");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                fullname,
+                email: email
+            }
+        },
+        {new:true}
+    ).select("-password");
+
+    return res.status(200).json(
+        new apiResponse(200,user,"Account details updated successfully")
+    );
+})
+// updateAccountDetails code ends here
+
+
+// updateUserAvatar code starts here
+const updateUserAvatar = asyncHandler(async(req,res)=>{
+    const avatarLocalPath = req.file?.path;
+    if (!avatarLocalPath) {
+        throw new apiError(400,"Avatar file is missing");
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+    if (!avatar.url) {
+        throw new apiError(400,"Error while uploading avatar");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                avatar: avatar.url
+            }
+        },
+        {new:true}
+    ).select('-password');
+
+    return res.status(200).json(
+        new apiResponse(200,user,"User avatar updated successfully")
+    );
+})
+// updateUserAvatar code ends here
 
 export {
     registerUser,
     loginUser,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar
 };
